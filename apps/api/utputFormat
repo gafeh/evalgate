@@ -1,8 +1,0 @@
-HTTP/1.1 400 Bad Request
-Content-Type: application/json; charset=utf-8
-content-length: 239
-Date: Sun, 20 Sep 2026 18:37:17 GMT
-Connection: keep-alive
-Keep-Alive: timeout=5
-
-{"errors":[{"message":"POST body sent invalid JSON.","extensions":{"code":"BAD_REQUEST","originalError":{"name":"SyntaxError","message":"Expected property name or '}' in JSON at position 1 (line 1 column 2), \"{\\\" is not valid JSON"}}}]}
