@@ -1,0 +1,247 @@
+question_id: frq-array-sum
+prompt: |
+  Write a method sumAll(int[] values) that returns the sum of every element
+  of the array. Assume the array is not null. An empty array sums to 0.
+
+rubric:
+  - id: r1
+    points: 1
+    description: Declares an accumulator and initialises it to 0 before the loop
+  - id: r2
+    points: 2
+    description: Adds each element of the array to the accumulator exactly once
+  - id: r3
+    points: 1
+    description: Returns the value held by the accumulator
+
+must_not_mention:
+  - here is the full solution
+
+cases:
+  - id: sum-correct-enhanced
+    tags: {error_mode: correct, unit: arrays, difficulty: easy}
+    awards: [r1, r2, r3]
+    must_mention: []
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int value : values) {
+              total += value;
+          }
+          return total;
+      }
+
+  - id: sum-correct-indexed
+    tags: {error_mode: correct, unit: arrays, difficulty: easy}
+    awards: [r1, r2, r3]
+    must_mention: []
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 0; i < values.length; i++) {
+              total += values[i];
+          }
+          return total;
+      }
+
+  - id: sum-correct-while
+    tags: {error_mode: correct, unit: arrays, difficulty: easy}
+    awards: [r1, r2, r3]
+    must_mention: []
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          int i = 0;
+          while (i < values.length) {
+              total += values[i];
+              i++;
+          }
+          return total;
+      }
+
+  - id: sum-correct-empty-guard
+    tags: {error_mode: correct, unit: arrays, difficulty: medium}
+    awards: [r1, r2, r3]
+    must_mention: []
+    note: >
+      The guard is redundant but harmless. Correct code should not lose a
+      point for being cautious.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          if (values.length == 0) {
+              return 0;
+          }
+          for (int i = 0; i < values.length; i++) {
+              total += values[i];
+          }
+          return total;
+      }
+
+  - id: sum-offbyone-upper
+    tags: {error_mode: off_by_one, unit: arrays, difficulty: medium}
+    awards: [r1, r3]
+    must_mention: [loop bound]
+    note: >
+      Runs one index past the end, so it throws before returning. r2 is lost
+      because the traversal is wrong, r1 and r3 stand on their own.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 0; i <= values.length; i++) {
+              total += values[i];
+          }
+          return total;
+      }
+
+  - id: sum-skips-first
+    tags: {error_mode: off_by_one, unit: arrays, difficulty: medium}
+    awards: [r1, r3]
+    must_mention: [first element]
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 1; i < values.length; i++) {
+              total += values[i];
+          }
+          return total;
+      }
+
+  - id: sum-returns-inside-loop
+    tags: {error_mode: control_flow, unit: arrays, difficulty: medium}
+    awards: [r1, r3]
+    must_mention: [return inside the loop]
+    note: >
+      Adds the first element then returns, so only one element is ever
+      accumulated. r2 is lost, the return itself is fine.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 0; i < values.length; i++) {
+              total += values[i];
+              return total;
+          }
+          return total;
+      }
+
+  - id: sum-assigns-not-adds
+    tags: {error_mode: operator, unit: arrays, difficulty: medium}
+    awards: [r1, r3]
+    must_mention: [assignment instead of addition]
+    note: >
+      This is why r2 says "adds each element" rather than "traverses each
+      element". The loop visits everything but accumulates nothing, so it
+      returns the last element.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 0; i < values.length; i++) {
+              total = values[i];
+          }
+          return total;
+      }
+
+  - id: sum-no-loop
+    tags: {error_mode: incomplete, unit: arrays, difficulty: easy}
+    awards: [r1, r3]
+    must_mention: [no loop]
+    note: >
+      A stub. Initialisation and return are both present and correct, there
+      is simply no traversal.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          return total;
+      }
+
+  - id: sum-init-first-element
+    tags: {error_mode: initialisation, unit: arrays, difficulty: hard}
+    awards: [r2, r3]
+    must_mention: [double]
+    note: >
+      Initialising to values[0] and then adding every element double counts
+      the first one. The traversal is correct, so r2 stands and r1 falls.
+      Also breaks on an empty array.
+    response: |
+      public int sumAll(int[] values) {
+          int total = values[0];
+          for (int value : values) {
+              total += value;
+          }
+          return total;
+      }
+
+  - id: sum-init-one
+    tags: {error_mode: initialisation, unit: arrays, difficulty: medium}
+    awards: [r2, r3]
+    must_mention: [initial value]
+    response: |
+      public int sumAll(int[] values) {
+          int total = 1;
+          for (int value : values) {
+              total += value;
+          }
+          return total;
+      }
+
+  - id: sum-doubles-result
+    tags: {error_mode: return_value, unit: arrays, difficulty: medium}
+    awards: [r1, r2]
+    must_mention: [returned value]
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 0; i < values.length; i++) {
+              total += values[i];
+          }
+          return total * 2;
+      }
+
+  - id: sum-returns-literal
+    tags: {error_mode: return_value, unit: arrays, difficulty: easy}
+    awards: [r1, r2]
+    must_mention: [returned value]
+    note: >
+      Accumulates correctly and then throws the result away. A good test of
+      whether a grader reads past the loop.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int value : values) {
+              total += value;
+          }
+          return 0;
+      }
+
+  - id: sum-missing-semicolons
+    tags: {error_mode: syntax, unit: arrays, difficulty: medium}
+    awards: []
+    must_mention: [syntax]
+    note: >
+      Does not compile, so nothing is earned under the standing policy. This
+      is the case Haiku gave 4 out of 4 to while listing the syntax errors in
+      its own feedback.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0
+          for (int i = 0; i < values.length i++) {
+              total += values[i]
+          return total;
+
+  - id: sum-length-as-method
+    tags: {error_mode: syntax, unit: arrays, difficulty: hard}
+    awards: []
+    must_mention: [length]
+    note: >
+      Array length is a field, not a method, so values.length() does not
+      compile. The logic is otherwise perfect, which makes this the hardest
+      case in the task: a grader that reasons about intent rather than code
+      will award full marks.
+    response: |
+      public int sumAll(int[] values) {
+          int total = 0;
+          for (int i = 0; i < values.length(); i++) {
+              total += values[i];
+          }
+          return total;
+      }

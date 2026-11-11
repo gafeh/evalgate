@@ -1,0 +1,277 @@
+question_id: frq-count-occurrences
+prompt: |
+  Write a method countOccurrences(String[] words, String target) that returns
+  the number of elements of words equal to target. Assume neither words nor
+  target is null, and that no element of words is null. Two strings are equal
+  when they hold the same characters.
+
+rubric:
+  - id: r1
+    points: 1
+    description: Declares a counter and initialises it to 0 before the loop
+  - id: r2
+    points: 2
+    description: Examines every element of words exactly once
+  - id: r3
+    points: 1
+    description: Compares string values rather than references
+  - id: r4
+    points: 1
+    description: Increments the counter only when an element matches the target
+  - id: r5
+    points: 1
+    description: Returns the value held by the counter
+
+must_not_mention:
+  - here is the full solution
+
+cases:
+  - id: count-correct-enhanced
+    tags: {error_mode: correct, unit: strings, difficulty: easy}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word.equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-correct-indexed
+    tags: {error_mode: correct, unit: strings, difficulty: easy}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (int i = 0; i < words.length; i++) {
+              if (words[i].equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-correct-compareto
+    tags: {error_mode: correct, unit: strings, difficulty: hard}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    note: >
+      A judgment call. r3 says "compares string values rather than
+      references", and compareTo() == 0 does exactly that, so it earns the
+      point even though it is not the idiomatic choice. A grader that pattern
+      matches on the literal word "equals" will mark this wrong, which is
+      what makes it worth having in the corpus.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word.compareTo(target) == 0) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-reference-equality
+    tags: {error_mode: reference_equality, unit: strings, difficulty: hard}
+    awards: [r1, r2, r4, r5]
+    must_mention: [reference comparison]
+    note: >
+      The headline error for this question. It compiles, it reads naturally,
+      and it works by accident on interned literals, so it is the case most
+      likely to be waved through.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word == target) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-inverted-condition
+    tags: {error_mode: logic, unit: strings, difficulty: medium}
+    awards: [r1, r2, r3, r5]
+    must_mention: [condition is inverted]
+    note: >
+      Counts everything that does not match. The comparison itself is
+      correct, so r3 stands and r4 falls.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (!word.equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-increments-always
+    tags: {error_mode: logic, unit: strings, difficulty: medium}
+    awards: [r1, r2, r3, r5]
+    must_mention: [increments regardless]
+    note: >
+      Compares correctly and then ignores the result, so it returns
+      words.length. r4 is the only point lost.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word.equals(target)) {
+                  // found one
+              }
+              count++;
+          }
+          return count;
+      }
+
+  - id: count-init-one
+    tags: {error_mode: initialisation, unit: strings, difficulty: medium}
+    awards: [r2, r3, r4, r5]
+    must_mention: [initial value]
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 1;
+          for (String word : words) {
+              if (word.equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-returns-length
+    tags: {error_mode: return_value, unit: strings, difficulty: easy}
+    awards: [r1, r2, r3, r4]
+    must_mention: [returned value]
+    note: >
+      Counts correctly and then returns the wrong variable. Everything
+      before the return statement earns its point.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word.equals(target)) {
+                  count++;
+              }
+          }
+          return words.length;
+      }
+
+  - id: count-offbyone-upper
+    tags: {error_mode: off_by_one, unit: strings, difficulty: medium}
+    awards: [r1, r3, r4, r5]
+    must_mention: [loop bound]
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (int i = 0; i <= words.length; i++) {
+              if (words[i].equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-skips-first
+    tags: {error_mode: off_by_one, unit: strings, difficulty: medium}
+    awards: [r1, r3, r4, r5]
+    must_mention: [first element]
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (int i = 1; i < words.length; i++) {
+              if (words[i].equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-returns-inside-loop
+    tags: {error_mode: control_flow, unit: strings, difficulty: medium}
+    awards: [r1, r3, r4, r5]
+    must_mention: [return inside the loop]
+    note: >
+      Returns after the first element either way, so it can only ever return
+      0 or 1. The traversal is what breaks.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word.equals(target)) {
+                  count++;
+              }
+              return count;
+          }
+          return count;
+      }
+
+  - id: count-nested-loop
+    tags: {error_mode: traversal, unit: strings, difficulty: hard}
+    awards: [r1, r3, r4, r5]
+    must_mention: [nested loop]
+    note: >
+      Visits every element once per element, so a single match is counted
+      words.length times. Comparison and increment logic are both correct,
+      which is why only r2 is lost.
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (int i = 0; i < words.length; i++) {
+              for (int j = 0; j < words.length; j++) {
+                  if (words[j].equals(target)) {
+                      count++;
+                  }
+              }
+          }
+          return count;
+      }
+
+  - id: count-no-loop
+    tags: {error_mode: incomplete, unit: strings, difficulty: easy}
+    awards: [r1, r5]
+    must_mention: [no loop]
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          return count;
+      }
+
+  - id: count-missing-paren
+    tags: {error_mode: syntax, unit: strings, difficulty: medium}
+    awards: []
+    must_mention: [syntax]
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (String word : words) {
+              if (word.equals(target) {
+                  count++;
+              }
+          }
+          return count;
+      }
+
+  - id: count-length-as-method
+    tags: {error_mode: syntax, unit: strings, difficulty: hard}
+    awards: []
+    must_mention: [length]
+    response: |
+      public int countOccurrences(String[] words, String target) {
+          int count = 0;
+          for (int i = 0; i < words.length(); i++) {
+              if (words[i].equals(target)) {
+                  count++;
+              }
+          }
+          return count;
+      }

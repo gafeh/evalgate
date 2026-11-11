@@ -1,0 +1,302 @@
+question_id: frq-row-sums
+prompt: |
+  Write a method rowSums(int[][] grid) that returns an int array in which
+  element i is the sum of row i of grid. Assume grid is not null and that
+  every row is non-null. A row with no elements sums to 0.
+
+rubric:
+  - id: r1
+    points: 1
+    description: Creates a result array whose length is the number of rows
+  - id: r2
+    points: 2
+    description: Visits every row of the grid exactly once
+  - id: r3
+    points: 2
+    description: Computes each row's sum from the elements of that row only
+  - id: r4
+    points: 1
+    description: Stores each row's sum at the matching index of the result
+  - id: r5
+    points: 1
+    description: Returns the result array
+
+must_not_mention:
+  - here is the full solution
+
+cases:
+  - id: rows-correct-nested
+    tags: {error_mode: correct, unit: arrays_2d, difficulty: easy}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-correct-enhanced-inner
+    tags: {error_mode: correct, unit: arrays_2d, difficulty: medium}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    note: >
+      The outer loop has to be indexed to write to the right slot, so the
+      enhanced for can only be used on the inner loop. Correct.
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int value : grid[r]) {
+                  total += value;
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-correct-empty-guard
+    tags: {error_mode: correct, unit: arrays_2d, difficulty: medium}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    response: |
+      public int[] rowSums(int[][] grid) {
+          if (grid.length == 0) {
+              return new int[0];
+          }
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-result-sized-by-columns
+    tags: {error_mode: array_length, unit: arrays_2d, difficulty: hard}
+    awards: [r2, r3, r4, r5]
+    must_mention: [length of the result array]
+    note: >
+      Sizes the result by the first row's width instead of the row count.
+      Works perfectly on a square grid and throws or truncates on anything
+      else, which makes it the hardest case here to catch by reading.
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid[0].length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-stores-at-zero
+    tags: {error_mode: index, unit: arrays_2d, difficulty: medium}
+    awards: [r1, r2, r3, r5]
+    must_mention: [index]
+    note: >
+      Every row's sum is written to slot 0, so only the last row survives.
+      The sums themselves are computed correctly, so only r4 falls.
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[0] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-returns-null
+    tags: {error_mode: return_value, unit: arrays_2d, difficulty: easy}
+    awards: [r1, r2, r3, r4]
+    must_mention: [returned value]
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return null;
+      }
+
+  - id: rows-accumulator-not-reset
+    tags: {error_mode: initialisation, unit: arrays_2d, difficulty: hard}
+    awards: [r1, r2, r4, r5]
+    must_mention: [reset]
+    note: >
+      The accumulator is declared outside the outer loop, so each row's
+      total carries over and the result is a running cumulative sum. This is
+      why r3 reads "from the elements of that row only".
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          int total = 0;
+          for (int r = 0; r < grid.length; r++) {
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-inner-offbyone
+    tags: {error_mode: off_by_one, unit: arrays_2d, difficulty: medium}
+    awards: [r1, r2, r4, r5]
+    must_mention: [inner loop bound]
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c <= grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-outer-offbyone
+    tags: {error_mode: off_by_one, unit: arrays_2d, difficulty: medium}
+    awards: [r1, r3, r4, r5]
+    must_mention: [outer loop bound]
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r <= grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-swapped-indices
+    tags: {error_mode: index, unit: arrays_2d, difficulty: hard}
+    awards: [r1, r2, r4, r5]
+    must_mention: [indices are swapped]
+    note: >
+      Sums the columns instead of the rows. On a square grid it returns
+      plausible numbers that are simply wrong, and on a ragged grid it
+      throws.
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[c][r];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-first-row-only
+    tags: {error_mode: index, unit: arrays_2d, difficulty: medium}
+    awards: [r1, r2, r4, r5]
+    must_mention: [same row every time]
+    note: >
+      The outer index is never used to select the row, so every slot gets
+      row 0's sum. The loop structure and the writes are otherwise right.
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[0].length; c++) {
+                  total += grid[0][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-swapped-and-wrong-slot
+    tags: {error_mode: index, unit: arrays_2d, difficulty: hard}
+    awards: [r1, r2, r5]
+    must_mention: [indices are swapped, index]
+    note: >
+      Two independent faults, so it loses both r3 and r4. Worth having one
+      case in the corpus that is wrong in more than one way, since a grader
+      that stops at the first problem will over-award it.
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[c][r];
+              }
+              sums[0] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-no-loop
+    tags: {error_mode: incomplete, unit: arrays_2d, difficulty: easy}
+    awards: [r1, r5]
+    must_mention: [no loop]
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length];
+          return sums;
+      }
+
+  - id: rows-missing-semicolon
+    tags: {error_mode: syntax, unit: arrays_2d, difficulty: medium}
+    awards: []
+    must_mention: [syntax]
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length]
+          for (int r = 0; r < grid.length; r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length; c++) {
+                  total += grid[r][c]
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }
+
+  - id: rows-length-as-method
+    tags: {error_mode: syntax, unit: arrays_2d, difficulty: hard}
+    awards: []
+    must_mention: [length]
+    response: |
+      public int[] rowSums(int[][] grid) {
+          int[] sums = new int[grid.length()];
+          for (int r = 0; r < grid.length(); r++) {
+              int total = 0;
+              for (int c = 0; c < grid[r].length(); c++) {
+                  total += grid[r][c];
+              }
+              sums[r] = total;
+          }
+          return sums;
+      }

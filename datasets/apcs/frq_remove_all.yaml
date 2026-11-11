@@ -1,0 +1,302 @@
+question_id: frq-remove-all
+prompt: |
+  Write a method removeAll(ArrayList<String> list, String target) that removes
+  every element of list equal to target, leaves the remaining elements in
+  their original order, and returns the number of elements removed. Assume
+  neither list nor target is null and that no element of list is null.
+
+rubric:
+  - id: r1
+    points: 2
+    description: >
+      Visits every element, correctly accounting for the index shift that a
+      removal causes
+  - id: r2
+    points: 1
+    description: Compares string values rather than references
+  - id: r3
+    points: 1
+    description: Removes every element equal to the target and no others
+  - id: r4
+    points: 1
+    description: Leaves the remaining elements in their original relative order
+  - id: r5
+    points: 1
+    description: Returns the number of elements removed
+
+must_not_mention:
+  - here is the full solution
+
+cases:
+  - id: remove-correct-backward
+    tags: {error_mode: correct, unit: arraylist, difficulty: medium}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    note: >
+      Iterating backward sidesteps the shift entirely, which is the usual
+      AP-level answer.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-correct-forward-adjusted
+    tags: {error_mode: correct, unit: arraylist, difficulty: hard}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = 0; i < list.size(); i++) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+                  i--;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-correct-iterator
+    tags: {error_mode: correct, unit: arraylist, difficulty: hard}
+    awards: [r1, r2, r3, r4, r5]
+    must_mention: []
+    note: >
+      A judgment call. Iterator.remove is the only safe way to remove during
+      a forward traversal, and it satisfies every rubric item. Not what most
+      AP students write, but correct, and a grader expecting an index loop
+      may mark it down.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          Iterator<String> it = list.iterator();
+          while (it.hasNext()) {
+              if (it.next().equals(target)) {
+                  it.remove();
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-forward-no-adjust
+    tags: {error_mode: traversal_shift, unit: arraylist, difficulty: hard}
+    awards: [r2, r3, r4, r5]
+    must_mention: [index shift]
+    note: >
+      The headline error for this question. After a removal every later
+      element slides down one, so the loop skips the element now sitting at
+      the current index. Runs without error and silently misses consecutive
+      duplicates. The removal logic itself is right, so the whole loss falls
+      on r1.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = 0; i < list.size(); i++) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-foreach-concurrent-mod
+    tags: {error_mode: traversal_shift, unit: arraylist, difficulty: hard}
+    awards: [r2, r3, r4, r5]
+    must_mention: [modifying while iterating]
+    note: >
+      Compiles and reads like the obvious solution, then throws
+      ConcurrentModificationException at runtime.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (String word : list) {
+              if (word.equals(target)) {
+                  list.remove(word);
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-backward-starts-at-size
+    tags: {error_mode: off_by_one, unit: arraylist, difficulty: medium}
+    awards: [r2, r3, r4, r5]
+    must_mention: [starting index]
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = list.size(); i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-reference-equality
+    tags: {error_mode: reference_equality, unit: arraylist, difficulty: hard}
+    awards: [r1, r3, r4, r5]
+    must_mention: [reference comparison]
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i) == target) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-returns-size
+    tags: {error_mode: return_value, unit: arraylist, difficulty: easy}
+    awards: [r1, r2, r3, r4]
+    must_mention: [returned value]
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return list.size();
+      }
+
+  - id: remove-count-init-one
+    tags: {error_mode: initialisation, unit: arraylist, difficulty: medium}
+    awards: [r1, r2, r3, r4]
+    must_mention: [initial value]
+    note: >
+      The list ends up correct and only the returned count is wrong, so the
+      loss sits on r5.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 1;
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-counts-but-never-removes
+    tags: {error_mode: incomplete, unit: arraylist, difficulty: medium}
+    awards: [r1, r2, r4, r5]
+    must_mention: [nothing is removed]
+    note: >
+      Counts matches and returns the right number while leaving the list
+      untouched. The return value is correct, which is what makes it
+      convincing.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-reverses-order
+    tags: {error_mode: ordering, unit: arraylist, difficulty: hard}
+    awards: [r1, r2, r3, r5]
+    must_mention: [order]
+    note: >
+      Rebuilds the list from a backward pass, so the survivors come out
+      reversed. Every element that should go, goes, and the count is right.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          ArrayList<String> kept = new ArrayList<String>();
+          int removed = 0;
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  removed++;
+              } else {
+                  kept.add(list.get(i));
+              }
+          }
+          list.clear();
+          for (int i = 0; i < kept.size(); i++) {
+              list.add(kept.get(i));
+          }
+          return removed;
+      }
+
+  - id: remove-clears-everything
+    tags: {error_mode: logic, unit: arraylist, difficulty: easy}
+    awards: [r5]
+    must_mention: [removes everything]
+    note: >
+      Returns the right number of removals for the wrong reason: it removed
+      everything. r5 is earned on its own terms, which is uncomfortable and
+      correct.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = list.size();
+          list.clear();
+          return removed;
+      }
+
+  - id: remove-no-loop
+    tags: {error_mode: incomplete, unit: arraylist, difficulty: easy}
+    awards: []
+    must_mention: [no loop]
+    note: >
+      A stub. It arguably leaves the other elements in order and returns a
+      correct count for the zero removals it performed, but it demonstrates
+      neither, so under the vacuous-satisfaction policy it earns nothing.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          return 0;
+      }
+
+  - id: remove-missing-semicolon
+    tags: {error_mode: syntax, unit: arraylist, difficulty: medium}
+    awards: []
+    must_mention: [syntax]
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0
+          for (int i = list.size() - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i)
+                  removed++;
+              }
+          }
+          return removed;
+      }
+
+  - id: remove-length-not-size
+    tags: {error_mode: syntax, unit: arraylist, difficulty: hard}
+    awards: []
+    must_mention: [size]
+    note: >
+      ArrayList has size(), not length. The logic is otherwise the correct
+      backward traversal.
+    response: |
+      public int removeAll(ArrayList<String> list, String target) {
+          int removed = 0;
+          for (int i = list.length - 1; i >= 0; i--) {
+              if (list.get(i).equals(target)) {
+                  list.remove(i);
+                  removed++;
+              }
+          }
+          return removed;
+      }
