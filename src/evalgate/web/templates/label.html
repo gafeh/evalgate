@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Label{% endblock %}
+{% block body %}
+<h1>Labelling</h1>
+<p class="sub">
+  Judge the feedback, not the awards. Pass if it's accurate, raises what it must and
+  tells the student what to change. Partial if it's thin or misses a required point.
+  Fail if it says something untrue or hands over the solution.
+</p>
+{% if read_only %}
+<div class="banner warn">This deployment is read-only, so labels cannot be saved here.</div>
+{% endif %}
+{% include "_card.html" %}
+<script>
+  document.addEventListener("keydown", (event) => {
+    if (event.target.tagName === "INPUT") return;
+    const key = { p: "pass", a: "partial", f: "fail", s: "skip" }[event.key];
+    if (key) document.querySelector(`button[data-verdict="${key}"]`)?.click();
+  });
+</script>
+{% endblock %}

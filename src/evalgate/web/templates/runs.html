@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Runs{% endblock %}
+{% block body %}
+<h1>Runs</h1>
+<p class="sub">Newest first. Pick two over the same dataset to compare them.</p>
+
+{% if not runs %}
+  <p class="empty">No runs yet.</p>
+{% else %}
+<table>
+  <tr><th>label</th><th>model</th><th>status</th><th class="num">cases</th>
+      <th class="num">mean</th><th class="num">over</th><th>run</th></tr>
+  {% for row in runs %}
+  <tr>
+    <td>{{ row.label or "(unlabelled)" }}</td>
+    <td>{{ row.model }}</td>
+    <td>{{ row.status }}</td>
+    <td class="num">{{ row.cases }}</td>
+    <td class="num">{{ "%.4f"|format(row.mean) }}</td>
+    <td class="num {{ 'bad' if row.over else '' }}">{{ "%g"|format(row.over) }}</td>
+    <td class="mono"><a class="case-link" href="/ui/runs/{{ row.id }}">{{ row.short }}</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

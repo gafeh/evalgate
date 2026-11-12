@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.label or run.id }}{% endblock %}
+{% block body %}
+<h1>{{ run.label or "(unlabelled)" }}</h1>
+<p class="sub mono">{{ run.model }} · {{ run.status }} · {{ run.id }}</p>
+
+<div class="cards">
+  <div class="card"><div class="k">cases</div><div class="v">{{ summary.cases }}</div></div>
+  <div class="card"><div class="k">mean score</div>
+    <div class="v">{{ "%.4f"|format(summary.mean_overall) }}</div></div>
+  <div class="card"><div class="k">exact match</div>
+    <div class="v">{{ "%.1f"|format(summary.exact_match_rate * 100) }}%</div></div>
+  <div class="card"><div class="k">over-credited</div>
+    <div class="v bad">{{ "%g"|format(summary.over_credit_points) }}</div></div>
+  <div class="card"><div class="k">under-credited</div>
+    <div class="v">{{ "%g"|format(summary.under_credit_points) }}</div></div>
+  <div class="card"><div class="k">spend</div>
+    <div class="v">${{ "%.4f"|format(usage.cost_usd) }}</div></div>
+</div>
+<p class="sub">{{ usage.calls }} model calls, {{ usage.cache_hits }} served from cache.
+  {{ summary.unparseable }} output(s) failed to parse.</p>
+
+<h2>By error mode</h2>
+<table>
+  <tr><th>mode</th><th class="num">n</th><th class="num">mean</th>
+      <th style="width: 30%"></th><th class="num">over-credit</th></tr>
+  {% for name, item in slices.items() %}
+  <tr>
+    <td>{{ name }}</td>
+    <td class="num">{{ item.cases }}</td>
+    <td class="num">{{ "%.3f"|format(item.mean_overall) }}</td>
+    <td><div class="bar"><span style="width: {{ item.mean_overall * 100 }}%"></span></div></td>
+    <td class="num {{ 'bad' if item.over_credit_points else '' }}">
+      {{ "%g"|format(item.over_credit_points) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Cases</h2>
+<table>
+  <tr><th>case</th><th class="num">score</th><th class="num">over</th><th class="num">under</th>
+      <th>judge</th><th>feedback</th></tr>
+  {% for row in results %}
+  <tr>
+    <td class="mono">{{ row.case_id }}</td>
+    <td class="num">{{ "%.3f"|format(row.overall) if row.overall is not none else "—" }}</td>
+    <td class="num {{ 'bad' if row.over_credit_points else '' }}">
+      {{ "%g"|format(row.over_credit_points or 0) }}</td>
+    <td class="num">{{ "%g"|format(row.under_credit_points or 0) }}</td>
+    <td>{{ row.judge_verdict or "—" }}
+      {%- if row.judge_confidence is not none %}
+      <span class="mono" style="color: var(--dim)">{{ "%.2f"|format(row.judge_confidence) }}</span>
+      {%- endif %}</td>
+    <td style="color: var(--dim)">{{ row.feedback[:110] }}{{ "…" if row.feedback|length > 110 }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

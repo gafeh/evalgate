@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator, Iterator
 
 import pytest
 import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -12,14 +13,17 @@ from sqlalchemy.ext.asyncio import (
 )
 
 import evalgate.db.models  # noqa: F401  populates Base.metadata
+from evalgate.api.app import create_app
 from evalgate.config import get_settings
 from evalgate.db.base import Base
 
-# Every table, so a cached LLM response from one test cannot answer another.
+# Every table, so a cached LLM response or a stale label from one test cannot
+# answer another.
 TRUNCATE_ALL = (
-    "TRUNCATE human_labels, review_items, judge_assessments, llm_calls, "
-    "llm_invocations, results, work_items, runs, cases, datasets CASCADE"
+    "TRUNCATE audit_entries, human_labels, review_items, judge_assessments, "
+    "llm_calls, llm_invocations, results, work_items, runs, cases, datasets CASCADE"
 )
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema() -> Iterator[None]:
@@ -71,3 +75,27 @@ async def engine() -> AsyncIterator[AsyncEngine]:
         async with eng.begin() as conn:
             await conn.execute(text(TRUNCATE_ALL))
         await eng.dispose()
+
+
+@pytest_asyncio.fixture
+async def client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    """An app bound to the test database, with writes allowed."""
+    app = create_app(engine=engine, read_only=False)
+    transport = ASGITransport(app=app)
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as http,
+        app.router.lifespan_context(app),
+    ):
+        yield http
+
+
+@pytest_asyncio.fixture
+async def locked_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    """The same app as a public deployment would run it."""
+    app = create_app(engine=engine, read_only=True)
+    transport = ASGITransport(app=app)
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as http,
+        app.router.lifespan_context(app),
+    ):
+        yield http

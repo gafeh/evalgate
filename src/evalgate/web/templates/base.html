@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}EvalGate{% endblock %}</title>
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<style>
+  :root {
+    --ink: #16181d; --dim: #6b7280; --line: #e3e6ea; --bg: #fbfbfc;
+    --good: #0f7b4f; --bad: #a4232c; --warn: #8a5a00; --accent: #2f4f8f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    border-bottom: 1px solid var(--line); background: #fff;
+    padding: 14px 24px; display: flex; gap: 20px; align-items: baseline;
+  }
+  header a { color: var(--dim); text-decoration: none; }
+  header a:hover, header a.on { color: var(--ink); }
+  header .brand { font-weight: 650; letter-spacing: -0.01em; color: var(--ink); }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 24px 80px; }
+  h1 { font-size: 21px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.07em;
+       color: var(--dim); margin: 32px 0 10px; font-weight: 600; }
+  .sub { color: var(--dim); margin: 0 0 24px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 600; font-size: 12px; color: var(--dim);
+       text-transform: uppercase; letter-spacing: 0.05em;
+       border-bottom: 1px solid var(--line); padding: 8px 10px; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  tr:hover td { background: #fff; }
+  .num { text-align: right; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+           gap: 12px; margin: 18px 0 8px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 12px 14px; }
+  .card .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
+  .card .v { font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .banner { border-radius: 7px; padding: 12px 14px; margin: 16px 0; border: 1px solid; }
+  .banner.pass { background: #eff8f3; border-color: #bfe2d1; color: var(--good); }
+  .banner.fail { background: #fdf0f1; border-color: #f0ccd0; color: var(--bad); }
+  .banner.warn { background: #fdf7e8; border-color: #ecdcb0; color: var(--warn); }
+  .banner ul { margin: 6px 0 0; padding-left: 18px; }
+  .bar { background: var(--line); border-radius: 3px; height: 8px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); }
+  .bar.two > span.actual { background: var(--good); }
+  pre { background: #fff; border: 1px solid var(--line); border-radius: 6px;
+        padding: 12px 14px; overflow-x: auto; font-size: 13px; margin: 0; }
+  .case { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; }
+  .case h3 { margin: 0 0 2px; font-size: 16px; }
+  .case .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+                 color: var(--dim); margin: 18px 0 6px; }
+  .keys { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  button { font: inherit; padding: 9px 16px; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--line); background: #fff; }
+  button:hover { border-color: var(--dim); }
+  button kbd { color: var(--dim); font-size: 12px; margin-left: 6px; }
+  input[type=text] { font: inherit; padding: 9px 12px; border: 1px solid var(--line);
+                     border-radius: 6px; width: 100%; margin-top: 10px; }
+  a.case-link { color: var(--accent); text-decoration: none; }
+  a.case-link:hover { text-decoration: underline; }
+  .empty { color: var(--dim); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">EvalGate</span>
+  <a href="/ui" class="{{ 'on' if nav == 'runs' }}">runs</a>
+  <a href="/ui/calibration" class="{{ 'on' if nav == 'calibration' }}">calibration</a>
+  <a href="/ui/label" class="{{ 'on' if nav == 'label' }}">label</a>
+  <a href="/docs">api</a>
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

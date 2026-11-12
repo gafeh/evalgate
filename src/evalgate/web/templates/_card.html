@@ -1,0 +1,53 @@
+<div class="case" id="card">
+{% if task is none %}
+  <p class="empty">Nothing left in the calibration queue.</p>
+{% else %}
+  <h3 class="mono">{{ task.case_id }}</h3>
+  <p class="sub" style="margin: 0">{{ remaining }} left · {{ task.reason }}</p>
+
+  <div class="label">Question</div>
+  <div>{{ task.question_prompt }}</div>
+
+  <div class="label">Rubric</div>
+  <ul class="mono" style="margin: 0; padding-left: 20px">
+    {% for line in task.rubric_lines %}<li>{{ line }}</li>{% endfor %}
+  </ul>
+
+  <div class="label">Student response</div>
+  <pre>{{ task.student_response }}</pre>
+
+  <div class="label">Awards</div>
+  <div class="mono">
+    correct: {{ task.expected_awards|join(", ") or "(none)" }} = {{ "%g"|format(task.expected_points) }} pt<br>
+    grader:  {{ task.grader_awards|join(", ") or "(none)" }} = {{ "%g"|format(task.grader_points) }} pt
+  </div>
+
+  <div class="label">Grader feedback</div>
+  {% if task.parsed_ok %}
+    <div>{{ task.grader_feedback }}</div>
+  {% else %}
+    <div class="bad">Output did not parse.</div>
+    <pre>{{ task.raw_output[:400] }}</pre>
+  {% endif %}
+
+  <div class="label">Requirements</div>
+  <div class="mono" style="color: var(--dim)">
+    must raise: {{ task.must_mention|join(", ") or "(nothing specified)" }}<br>
+    must avoid: {{ task.must_not_mention|join(", ") or "(nothing specified)" }}
+  </div>
+
+  {% if not read_only %}
+  <form hx-post="/ui/label" hx-target="#card" hx-swap="outerHTML">
+    <input type="hidden" name="review_item_id" value="{{ task.review_item_id }}">
+    <input type="hidden" name="run_id" value="{{ run_id or '' }}">
+    <input type="text" name="notes" placeholder="notes (optional)">
+    <div class="keys">
+      <button type="submit" name="verdict" value="pass" data-verdict="pass">pass<kbd>p</kbd></button>
+      <button type="submit" name="verdict" value="partial" data-verdict="partial">partial<kbd>a</kbd></button>
+      <button type="submit" name="verdict" value="fail" data-verdict="fail">fail<kbd>f</kbd></button>
+      <button type="submit" name="verdict" value="skip" data-verdict="skip">skip<kbd>s</kbd></button>
+    </div>
+  </form>
+  {% endif %}
+{% endif %}
+</div>

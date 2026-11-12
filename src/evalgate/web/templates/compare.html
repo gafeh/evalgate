@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Compare{% endblock %}
+{% block body %}
+<h1>Gate</h1>
+<p class="sub mono">candidate {{ candidate }} against baseline {{ baseline }}</p>
+
+<div class="banner {{ 'pass' if result.passed else 'fail' }}">
+  <strong>{{ result.verdict|upper }} · gate {{ "PASS" if result.passed else "FAIL" }}</strong><br>
+  {{ result.reason }}
+  {% if result.cases_needed %}<br>About {{ result.cases_needed }} paired cases would decide it.{% endif %}
+</div>
+
+<div class="cards">
+  <div class="card"><div class="k">paired cases</div><div class="v">{{ result.paired_cases }}</div></div>
+  <div class="card"><div class="k">baseline mean</div>
+    <div class="v">{{ "%.4f"|format(result.baseline.mean_overall) }}</div></div>
+  <div class="card"><div class="k">candidate mean</div>
+    <div class="v">{{ "%.4f"|format(result.candidate.mean_overall) }}</div></div>
+</div>
+
+{% if result.slices %}
+<h2>By error mode</h2>
+<table>
+  <tr><th>mode</th><th class="num">n</th><th class="num">baseline</th>
+      <th class="num">candidate</th><th class="num">delta</th></tr>
+  {% for item in result.slices %}
+  <tr>
+    <td>{{ item.tag_value }}</td>
+    <td class="num">{{ item.cases }}</td>
+    <td class="num">{{ "%.3f"|format(item.baseline_mean) }}</td>
+    <td class="num">{{ "%.3f"|format(item.candidate_mean) }}</td>
+    <td class="num {{ 'bad' if item.delta < 0 else ('good' if item.delta > 0 else '') }}">
+      {{ "%+.3f"|format(item.delta) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

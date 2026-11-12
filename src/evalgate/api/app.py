@@ -4,11 +4,11 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from evalgate import __version__
-from evalgate.api.routers import datasets, reports, review, runs
+from evalgate.api.routers import datasets, reports, review, runs, ui
 from evalgate.config import get_settings
 from evalgate.db.session import build_engine
 
@@ -56,10 +56,15 @@ def create_app(
     async def health() -> dict[str, str | bool]:
         return {"status": "ok", "version": __version__, "read_only": locked}
 
+    @app.get("/", include_in_schema=False)
+    async def root() -> RedirectResponse:
+        return RedirectResponse("/ui")
+
     app.include_router(datasets.router)
     app.include_router(runs.router)
     app.include_router(review.router)
     app.include_router(reports.router)
+    app.include_router(ui.router)
     return app
 
 
