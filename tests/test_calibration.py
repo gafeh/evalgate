@@ -33,6 +33,7 @@ def test_empty_report_is_all_zero() -> None:
     assert result.pairs == 0
     assert result.recommended_threshold is None
     assert result.bins == ()
+    assert result.warnings == ("no labelled pairs",)
 
 
 def test_perfect_agreement() -> None:
@@ -135,3 +136,78 @@ def test_full_report_flags_overconfidence_and_reports_coverage() -> None:
 def test_bins_rejects_a_nonsense_bin_count() -> None:
     with pytest.raises(ValueError, match="at least 1"):
         reliability_bins([pair(0, PASS, PASS, 0.5)], bins=0)
+
+
+def test_a_small_sample_is_flagged() -> None:
+    result = compute_calibration([pair(i, PASS, PASS, 0.9) for i in range(5)])
+    assert result.trustworthy is False
+    assert any("labelled pairs" in note for note in result.warnings)
+
+
+def test_repeated_cases_are_flagged() -> None:
+    pairs = [
+        LabelPair(
+            case_id="same", judge_verdict=PASS, judge_confidence=0.9, human_verdict=PASS
+        )
+        for _ in range(40)
+    ]
+    result = compute_calibration(pairs)
+    assert result.distinct_cases == 1
+    assert any("distinct cases" in note for note in result.warnings)
+
+
+def test_a_single_confidence_bin_is_flagged() -> None:
+    pairs = [pair(i, PASS, PASS, 0.9) for i in range(20)]
+    pairs += [pair(i + 20, PASS, FAIL, 0.95) for i in range(20)]
+    result = compute_calibration(pairs)
+    assert any("one bin" in note for note in result.warnings)
+
+
+def test_perfect_agreement_is_flagged() -> None:
+    pairs = [pair(i, PASS, PASS, 0.5 + i * 0.01) for i in range(40)]
+    result = compute_calibration(pairs)
+    assert any("perfect agreement" in note for note in result.warnings)
+
+
+def test_a_healthy_report_has_no_warnings() -> None:
+    pairs = [pair(i, PASS, PASS, 0.95) for i in range(25)]
+    pairs += [pair(i + 25, PASS, FAIL, 0.3) for i in range(15)]
+    result = compute_calibration(pairs)
+    assert result.warnings == ()
+    assert result.trustworthy is True
+
+
+def test_a_cut_that_reviews_nothing_is_flagged() -> None:
+    """95% accuracy everywhere means the lowest cut wins and nobody reviews."""
+    pairs = [pair(i, PASS, PASS, 0.9) for i in range(38)]
+    pairs += [pair(i + 38, PASS, FAIL, 0.95) for i in range(2)]
+    result = compute_calibration(pairs)
+
+    assert result.recommended_threshold is not None
+    assert result.coverage_at_threshold == 1.0
+    assert result.pairs_below_threshold == 0
+    assert any("nothing to review" in note for note in result.threshold_warnings)
+
+
+def test_an_unmeasured_low_side_is_flagged() -> None:
+    """The cut sits above the low group, but only three pairs are down there."""
+    pairs = [pair(i, PASS, PASS, 0.95) for i in range(33)]
+    pairs += [pair(i + 33, PASS, FAIL, 0.95) for i in range(2)]
+    pairs += [pair(i + 35, PASS, FAIL, 0.2) for i in range(3)]
+    result = compute_calibration(pairs)
+
+    assert result.recommended_threshold == 0.95
+    assert result.pairs_below_threshold == 3
+    assert result.coverage_at_threshold < 1.0
+    assert any("low side is unmeasured" in note for note in result.threshold_warnings)
+
+
+def test_a_well_supported_cut_has_no_threshold_warnings() -> None:
+    pairs = [pair(i, PASS, PASS, 0.95) for i in range(30)]
+    pairs += [pair(i + 30, PASS, FAIL, 0.3) for i in range(20)]
+    result = compute_calibration(pairs)
+
+    assert result.recommended_threshold == 0.95
+    assert result.threshold_warnings == ()
+    assert result.coverage_at_threshold < 1.0
+    assert result.pairs_below_threshold == 20

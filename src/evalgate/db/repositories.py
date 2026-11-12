@@ -210,3 +210,16 @@ async def get_judge_assessment(
 ) -> JudgeAssessmentRow | None:
     stmt = select(JudgeAssessmentRow).where(JudgeAssessmentRow.result_id == result_id)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+async def list_datasets(session: AsyncSession, limit: int = 100) -> Sequence[Dataset]:
+    stmt = select(Dataset).order_by(Dataset.created_at.desc()).limit(limit)
+    return (await session.execute(stmt)).scalars().all()
+
+
+async def list_runs(
+    session: AsyncSession, *, dataset_id: UUID | None = None, limit: int = 100
+) -> Sequence[Run]:
+    stmt = select(Run).order_by(Run.created_at.desc()).limit(limit)
+    if dataset_id is not None:
+        stmt = stmt.where(Run.dataset_id == dataset_id)
+    return (await session.execute(stmt)).scalars().all()

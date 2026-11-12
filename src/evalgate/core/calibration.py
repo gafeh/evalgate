@@ -55,7 +55,10 @@ class CalibrationReport:
     recommended_threshold: float | None = None
     coverage_at_threshold: float = 0.0
     accuracy_at_threshold: float = 0.0
+    pairs_below_threshold: int = 0
+    accuracy_below_threshold: float = 0.0
     warnings: tuple[str, ...] = ()
+    threshold_warnings: tuple[str, ...] = ()
 
     @property
     def overconfident(self) -> bool:
@@ -63,7 +66,12 @@ class CalibrationReport:
 
     @property
     def trustworthy(self) -> bool:
-        """Whether these numbers should be quoted as a measurement."""
+        """Whether the agreement statistics should be quoted as a measurement.
+
+        Scoped to the statistics only. The threshold recommendation has its
+        own warnings, because it can be unsupported even when the agreement
+        numbers are sound.
+        """
         return not self.warnings
 
 
@@ -165,6 +173,10 @@ def recommend_threshold(
     whole point: the review threshold is a measurement, not a guess.
     Returns None when no cut reaches the target with enough support, which
     means the judge is not good enough to auto-approve anything yet.
+
+    This answers "where is auto-approval safe" and nothing more. Whether the
+    labelled data supports the answer is a separate question, handled by
+    _threshold_warnings.
     """
     if not pairs:
         return None
@@ -184,7 +196,7 @@ def _warnings(
     agreement: float,
     distinct: int,
 ) -> tuple[str, ...]:
-    """Reasons not to believe this report.
+    """Reasons not to believe the agreement statistics.
 
     A calibration report that looks perfect is usually describing its own
     inputs rather than the judge. These checks exist so the report says so
@@ -216,6 +228,37 @@ def _warnings(
     return tuple(notes)
 
 
+def _threshold_warnings(
+    threshold: float | None,
+    below: Sequence[LabelPair],
+    coverage: float,
+    min_support: int,
+) -> tuple[str, ...]:
+    """Reasons not to act on the recommended threshold.
+
+    A cut is only meaningful if the data contains cases on both sides of it.
+    A judge that reports high confidence on almost everything produces a
+    labelled set with nothing below the cut, and then any threshold fits.
+    """
+    if threshold is None:
+        return ()
+
+    notes: list[str] = []
+    if coverage >= 1.0:
+        notes.append(
+            "this cut sends nothing to review, so it is not a working "
+            "threshold. On this sample the judge clears the target everywhere, "
+            "which is also what too few low-confidence labels looks like"
+        )
+    if len(below) < min_support:
+        notes.append(
+            f"only {len(below)} labelled pairs fall below the cut, so its low "
+            "side is unmeasured. Label more low-confidence cases before "
+            "trusting it"
+        )
+    return tuple(notes)
+
+
 def compute_calibration(
     pairs: Sequence[LabelPair],
     *,
@@ -234,6 +277,11 @@ def compute_calibration(
         if threshold is not None
         else []
     )
+    below = (
+        [pair for pair in pairs if pair.judge_confidence < threshold]
+        if threshold is not None
+        else []
+    )
 
     by_verdict: dict[str, float] = {}
     for verdict in JudgeVerdict:
@@ -244,6 +292,7 @@ def compute_calibration(
     curve = reliability_bins(pairs, bins=bins)
     agreement = agreement_rate(pairs)
     distinct = len({pair.case_id for pair in pairs})
+    coverage = len(above) / len(pairs) if above else 0.0
 
     return CalibrationReport(
         pairs=len(pairs),
@@ -256,7 +305,12 @@ def compute_calibration(
         bins=curve,
         agreement_by_judge_verdict=by_verdict,
         recommended_threshold=threshold,
-        coverage_at_threshold=len(above) / len(pairs) if above else 0.0,
+        coverage_at_threshold=coverage,
         accuracy_at_threshold=agreement_rate(above) if above else 0.0,
+        pairs_below_threshold=len(below),
+        accuracy_below_threshold=agreement_rate(below) if below else 0.0,
         warnings=_warnings(pairs, curve, agreement, distinct),
+        threshold_warnings=_threshold_warnings(
+            threshold, below, coverage, min_support
+        ),
     )
