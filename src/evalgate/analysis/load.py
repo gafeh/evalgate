@@ -48,6 +48,8 @@ async def load_outcomes(session: AsyncSession, run_id: UUID) -> list[CaseOutcome
             )
         )
     return outcomes
+
+
 async def load_label_pairs(
     session: AsyncSession,
     *,
@@ -56,9 +58,13 @@ async def load_label_pairs(
 ) -> list[LabelPair]:
     """Judge verdict beside human verdict, for every labelled case.
 
+    The sampling weight travels with the pair, so a stratified sample stays
+    unbiased downstream. Simple random samples carry a weight of 1 and the
+    weighted statistics collapse to the ordinary ones.
+
     calibration_only defaults to True on purpose. Triaged items were queued
-    because something looked wrong, so measuring judge accuracy on them
-    would answer a question nobody asked.
+    because something looked wrong, so measuring judge accuracy on them would
+    answer a question nobody asked.
     """
     stmt = (
         select(
@@ -66,12 +72,14 @@ async def load_label_pairs(
             JudgeAssessmentRow.verdict,
             JudgeAssessmentRow.confidence,
             HumanLabel.verdict,
+            ReviewItem.weight,
+            ReviewItem.stratum,
         )
+        .select_from(HumanLabel)
         .join(ReviewItem, ReviewItem.id == HumanLabel.review_item_id)
         .join(Result, Result.id == ReviewItem.result_id)
         .join(Case, Case.id == Result.case_id)
         .join(JudgeAssessmentRow, JudgeAssessmentRow.result_id == Result.id)
-        .select_from(HumanLabel)
         .order_by(Case.external_id)
     )
     if calibration_only:
@@ -86,6 +94,9 @@ async def load_label_pairs(
             judge_verdict=JudgeVerdict(judge_verdict),
             judge_confidence=float(confidence),
             human_verdict=JudgeVerdict(human_verdict),
+            weight=float(weight),
+            stratum=str(stratum or ""),
         )
-        for external_id, judge_verdict, confidence, human_verdict in rows
+        for external_id, judge_verdict, confidence, human_verdict, weight, stratum
+        in rows
     ]

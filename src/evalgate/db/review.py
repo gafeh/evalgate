@@ -30,6 +30,10 @@ TRIAGE_REASONS = (
 )
 
 
+class SamplingConflictError(RuntimeError):
+    """A run's calibration sample must use one sampling design, not two."""
+
+
 @dataclass(frozen=True, slots=True)
 class ReviewTask:
     """Everything a human needs to label one result, and nothing more.
@@ -69,6 +73,41 @@ async def _unqueued_results(session: AsyncSession, run_id: UUID) -> list[UUID]:
     return list((await session.execute(stmt)).scalars().all())
 
 
+async def _judged_unqueued(
+    session: AsyncSession, run_id: UUID
+) -> list[tuple[UUID, float]]:
+    stmt = (
+        select(Result.id, JudgeAssessmentRow.confidence)
+        .join(JudgeAssessmentRow, JudgeAssessmentRow.result_id == Result.id)
+        .where(
+            Result.run_id == run_id,
+            Result.id.not_in(select(ReviewItem.result_id)),
+        )
+        .order_by(Result.created_at)
+    )
+    return [
+        (result_id, float(confidence))
+        for result_id, confidence in (await session.execute(stmt)).all()
+    ]
+
+
+async def _existing_design(session: AsyncSession, run_id: UUID) -> str | None:
+    """Which design this run's calibration sample already uses, if any."""
+    stmt = (
+        select(ReviewItem.stratum)
+        .join(Result, Result.id == ReviewItem.result_id)
+        .where(
+            Result.run_id == run_id,
+            ReviewItem.reason == ReviewReason.CALIBRATION,
+        )
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        return None
+    return "stratified" if row else "random"
+
+
 async def count_items(
     session: AsyncSession,
     *,
@@ -91,12 +130,18 @@ async def count_items(
 async def enqueue_calibration_sample(
     session: AsyncSession, *, run_id: UUID, size: int, seed: int = 0
 ) -> int:
-    """Top the calibration sample up to size. Returns how many were added.
+    """Top a simple random calibration sample up to size. Returns how many were added.
 
     size is a target, not an increment, so running this twice does not grow
     the sample. Call it before enqueue_triage: drawn second, the sample would
     only contain what triage did not want, which is not a random sample.
     """
+    if await _existing_design(session, run_id) == "stratified":
+        raise SamplingConflictError(
+            f"run {run_id} already has a stratified calibration sample. "
+            "Mixing designs biases the estimate; use a fresh run."
+        )
+
     existing = await count_items(
         session, run_id=run_id, reasons=(ReviewReason.CALIBRATION,)
     )
@@ -122,6 +167,66 @@ async def enqueue_calibration_sample(
     )
     await session.commit()
     return len(chosen)
+
+
+async def enqueue_stratified_sample(
+    session: AsyncSession,
+    *,
+    run_id: UUID,
+    per_stratum: int,
+    bins: int = 5,
+    seed: int = 0,
+) -> dict[str, int]:
+    """Sample a fixed number from each confidence stratum, with weights.
+
+    A simple random sample reflects the judge's own confidence distribution, so
+    if it reports 0.9 on almost everything the low end never gets labelled and
+    no threshold can be justified. Taking a fixed number per stratum fixes the
+    coverage, and the weight (stratum size over sampled size) is what keeps the
+    overall estimates unbiased despite the deliberate imbalance.
+    """
+    design = await _existing_design(session, run_id)
+    if design == "random":
+        raise SamplingConflictError(
+            f"run {run_id} already has a simple random calibration sample. "
+            "Mixing designs biases the estimate; use a fresh run."
+        )
+
+    candidates = await _judged_unqueued(session, run_id)
+    if not candidates:
+        return {}
+
+    width = 1.0 / bins
+    buckets: dict[int, list[UUID]] = {}
+    for result_id, confidence in candidates:
+        index = min(bins - 1, max(0, int(confidence / width)))
+        buckets.setdefault(index, []).append(result_id)
+
+    rng = random.Random(seed)
+    taken: dict[str, int] = {}
+    items: list[ReviewItem] = []
+
+    for index in sorted(buckets):
+        population = buckets[index]
+        size = min(per_stratum, len(population))
+        chosen = rng.sample(population, k=size)
+        label = f"{index * width:.1f}-{(index + 1) * width:.1f}"
+        taken[label] = size
+        items.extend(
+            ReviewItem(
+                result_id=result_id,
+                reason=ReviewReason.CALIBRATION,
+                priority=0.0,
+                stratum=label,
+                weight=len(population) / size,
+            )
+            for result_id in chosen
+        )
+
+    if items:
+        session.add_all(items)
+        await session.commit()
+    return taken
 
 
 async def enqueue_triage(

@@ -141,7 +141,7 @@ def test_bins_rejects_a_nonsense_bin_count() -> None:
 def test_a_small_sample_is_flagged() -> None:
     result = compute_calibration([pair(i, PASS, PASS, 0.9) for i in range(5)])
     assert result.trustworthy is False
-    assert any("labelled pairs" in note for note in result.warnings)
+    assert any("effective sample size" in note for note in result.warnings)
 
 
 def test_repeated_cases_are_flagged() -> None:

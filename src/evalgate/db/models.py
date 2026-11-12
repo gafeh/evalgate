@@ -270,6 +270,9 @@ class ReviewItem(UuidPk, Timestamped, Base):
     )
     reason: Mapped[ReviewReason] = mapped_column(_enum(ReviewReason, "review_reason"))
     priority: Mapped[float] = mapped_column(Float, default=0.0)
+        # Stratified sampling. Empty stratum means a simple random draw.
+    stratum: Mapped[str] = mapped_column(String(16), default="")
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
 
 
 class HumanLabel(UuidPk, Timestamped, Base):

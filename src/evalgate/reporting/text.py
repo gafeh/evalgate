@@ -92,6 +92,8 @@ def calibration_lines(report: CalibrationReport, *, target: float) -> list[str]:
     lines.extend(
         [
             f"labelled calibration pairs: {report.pairs}",
+            f"effective sample size:      {report.effective_pairs:.1f}"
+            + ("  (weighted)" if report.weighted else ""),
             f"distinct cases:             {report.distinct_cases}",
             f"human agreement:            {report.agreement:.3f}",
             f"cohen's kappa:              {report.kappa:.3f}",
@@ -100,6 +102,17 @@ def calibration_lines(report: CalibrationReport, *, target: float) -> list[str]:
             f"mean judge confidence:      {report.mean_confidence:.3f}",
             "the judge is "
             + ("OVERCONFIDENT" if report.overconfident else "not overconfident"),
+        ]
+    )
+
+    if report.strata:
+        lines.append("")
+        lines.append("labels per stratum")
+        for name, count in report.strata.items():
+            lines.append(f"  {name:<12}{count:>4}")
+
+    lines.extend(
+        [
             "",
             "reliability curve",
             f"  {'bin':<14}{'n':>5}{'claimed':>10}{'actual':>9}{'gap':>9}",
@@ -123,9 +136,7 @@ def calibration_lines(report: CalibrationReport, *, target: float) -> list[str]:
             "so every result should go to review"
         )
     else:
-        lines.append(
-            f"recommended review threshold: {report.recommended_threshold:.3f}"
-        )
+        lines.append(f"recommended review threshold: {report.recommended_threshold:.3f}")
         lines.append(
             f"  above it: {report.coverage_at_threshold:.1%} of cases at "
             f"{report.accuracy_at_threshold:.1%} accuracy"

@@ -23,7 +23,7 @@ from tests.factories import make_case, make_dataset
 
 @pytest_asyncio.fixture
 async def client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
-    app = create_app(engine=engine)
+    app = create_app(engine=engine, read_only=False)
     transport = ASGITransport(app=app)
     async with (
         AsyncClient(transport=transport, base_url="http://test") as http,

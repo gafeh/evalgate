@@ -26,6 +26,12 @@ from evalgate.db.repositories import (
     save_dataset,
     work_item_counts,
 )
+from evalgate.db.review import (
+    SamplingConflictError,
+    enqueue_stratified_sample,
+    enqueue_triage,
+    review_counts,
+)
 from evalgate.db.session import build_engine, session_scope
 from evalgate.judge.assessor import LlmJudge
 from evalgate.judge.cache import run_usage
@@ -64,6 +70,17 @@ def _split_spec(spec: str) -> tuple[str, str]:
 def _emit(lines: list[str]) -> None:
     for line in lines:
         typer.echo(line)
+
+
+def _echo_verification(verification: Verification) -> None:
+    typer.echo(f"links: {verification.links}")
+    typer.echo(f"root:  {verification.root or '(empty chain)'}")
+    if verification.ok:
+        typer.echo("integrity: OK")
+        return
+    typer.echo("integrity: FAILED")
+    for problem in verification.problems:
+        typer.echo(f"  {problem}")
 
 
 @dataset_app.command("load")
@@ -320,13 +337,52 @@ def worker(
 def review_enqueue(
     run_id: Annotated[str, typer.Argument()],
     sample: Annotated[int, typer.Option(help="target calibration sample size")] = 50,
+    stratified: Annotated[
+        bool,
+        typer.Option("--stratified", help="sample evenly across confidence strata"),
+    ] = False,
+    per_stratum: Annotated[int, typer.Option(help="with --stratified")] = 12,
+    bins: Annotated[int, typer.Option(help="with --stratified")] = 5,
     seed: Annotated[int, typer.Option()] = 0,
     no_triage: Annotated[bool, typer.Option("--no-triage")] = False,
 ) -> None:
-    """Draw a random calibration sample, then triage anything that looks wrong."""
-    asyncio.run(
-        enqueue_review(UUID(run_id), sample=sample, triage=not no_triage, seed=seed)
-    )
+    """Draw a calibration sample, then triage anything that looks wrong."""
+    identifier = UUID(run_id)
+
+    async def stratify() -> None:
+        engine = build_engine()
+        try:
+            async with session_scope(engine) as session:
+                taken = await enqueue_stratified_sample(
+                    session,
+                    run_id=identifier,
+                    per_stratum=per_stratum,
+                    bins=bins,
+                    seed=seed,
+                )
+                triaged = (
+                    0 if no_triage else await enqueue_triage(session, run_id=identifier)
+                )
+                counts = await review_counts(session, run_id=identifier)
+        finally:
+            await engine.dispose()
+
+        for name, count in sorted(taken.items()):
+            typer.echo(f"stratum {name}: {count}")
+        typer.echo(f"triaged: {triaged} new")
+        typer.echo(f"queue: {counts}")
+
+    try:
+        if stratified:
+            asyncio.run(stratify())
+        else:
+            asyncio.run(
+                enqueue_review(
+                    identifier, sample=sample, triage=not no_triage, seed=seed
+                )
+            )
+    except SamplingConflictError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @review_app.command("label")
@@ -356,9 +412,7 @@ def review_label(
 def calibrate(
     run_id: Annotated[str, typer.Option()] = "",
     bins: Annotated[int, typer.Option()] = 5,
-    target: Annotated[
-        float, typer.Option(help="accuracy the threshold must hit")
-    ] = 0.90,
+    target: Annotated[float, typer.Option(help="accuracy the threshold must hit")] = 0.90,
     include_triage: Annotated[
         bool, typer.Option("--include-triage", help="biases the estimate")
     ] = False,
@@ -374,38 +428,18 @@ def calibrate(
                 calibration_only=not include_triage,
             )
         await engine.dispose()
-        report = compute_calibration(pairs, bins=bins, target_accuracy=target)
-        _emit(calibration_lines(report, target=target))
+        report_data = compute_calibration(pairs, bins=bins, target_accuracy=target)
+        _emit(calibration_lines(report_data, target=target))
 
     asyncio.run(go())
-
-
-@app.command("serve")
-def serve(
-    host: Annotated[str, typer.Option()] = "127.0.0.1",
-    port: Annotated[int, typer.Option()] = 8000,
-    reload: Annotated[bool, typer.Option("--reload")] = False,
-) -> None:
-    """Serve the HTTP API."""
-    import uvicorn
-
-    uvicorn.run("evalgate.api.app:app", host=host, port=port, reload=reload)
-
-def _echo_verification(verification: Verification) -> None:
-    typer.echo(f"links: {verification.links}")
-    typer.echo(f"root:  {verification.root or '(empty chain)'}")
-    if verification.ok:
-        typer.echo("integrity: OK")
-        return
-    typer.echo("integrity: FAILED")
-    for problem in verification.problems:
-        typer.echo(f"  {problem}")
 
 
 @app.command("seal")
 def seal(
     run_id: Annotated[str, typer.Argument()],
-    reseal: Annotated[bool, typer.Option("--reseal", help="replace an existing chain")] = False,
+    reseal: Annotated[
+        bool, typer.Option("--reseal", help="replace an existing chain")
+    ] = False,
 ) -> None:
     """Hash-chain a finished run's results."""
     identifier = UUID(run_id)
@@ -500,3 +534,15 @@ def report(
                 raise typer.Exit(code=1)
 
     asyncio.run(go())
+
+
+@app.command("serve")
+def serve(
+    host: Annotated[str, typer.Option()] = "127.0.0.1",
+    port: Annotated[int, typer.Option()] = 8000,
+    reload: Annotated[bool, typer.Option("--reload")] = False,
+) -> None:
+    """Serve the HTTP API."""
+    import uvicorn
+
+    uvicorn.run("evalgate.api.app:app", host=host, port=port, reload=reload)
