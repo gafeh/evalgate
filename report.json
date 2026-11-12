@@ -1,0 +1,127 @@
+{
+  "audit": {
+    "links": 60,
+    "ok": false,
+    "problems": [
+      "seq 17: row: case remove-clears-everything no longer matches its own fingerprint"
+    ],
+    "root": "ac573b03cd7fba424330e158c1cb3043f8fd767c0a640b4a955dc9b841e190b3"
+  },
+  "calibration": {
+    "agreement": 0.94,
+    "brier": 0.043334000000000004,
+    "distinct_cases": 50,
+    "expected_calibration_error": 0.06379999999999998,
+    "kappa": 0.796195652173913,
+    "pairs": 50,
+    "recommended_threshold": 0.55,
+    "threshold_warnings": [
+      "this cut sends nothing to review, so it is not a working threshold. On this sample the judge clears the target everywhere, which is also what too few low-confidence labels looks like",
+      "only 0 labelled pairs fall below the cut, so its low side is unmeasured. Label more low-confidence cases before trusting it"
+    ],
+    "trustworthy": true,
+    "warnings": []
+  },
+  "generated_at": "2026-11-12T11:29:38.196596+00:00",
+  "report_hash": "1ade88346f698d2311cd16666287e9e1c288dab345dad8c97dfbd696da175937",
+  "run": {
+    "dataset": "32707ca6-83ba-4775-ab62-b9baedfb67b8",
+    "dataset_content_hash": "22f73eb047bd1fc8a7e50440ea6941cf4da6bdb03ad49800aea51a97ecf2e33e",
+    "id": "6b934641-3ae6-4923-b4b8-de0c8383c138",
+    "label": "live",
+    "model": "claude-haiku-5-5",
+    "status": "completed"
+  },
+  "slices": {
+    "array_length": {
+      "cases": 1,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "control_flow": {
+      "cases": 2,
+      "mean_overall": 0.7,
+      "over_credit_points": 0.0
+    },
+    "correct": {
+      "cases": 13,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "incomplete": {
+      "cases": 5,
+      "mean_overall": 0.8800000000000001,
+      "over_credit_points": 0.0
+    },
+    "index": {
+      "cases": 4,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "initialisation": {
+      "cases": 5,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "logic": {
+      "cases": 3,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "off_by_one": {
+      "cases": 7,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "operator": {
+      "cases": 1,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "ordering": {
+      "cases": 1,
+      "mean_overall": 0.5333333333333333,
+      "over_credit_points": 1.0
+    },
+    "reference_equality": {
+      "cases": 2,
+      "mean_overall": 1.0,
+      "over_credit_points": 0.0
+    },
+    "return_value": {
+      "cases": 5,
+      "mean_overall": 0.9199999999999999,
+      "over_credit_points": 0.0
+    },
+    "syntax": {
+      "cases": 8,
+      "mean_overall": 0.0,
+      "over_credit_points": 38.0
+    },
+    "traversal": {
+      "cases": 1,
+      "mean_overall": 0.5142857142857142,
+      "over_credit_points": 0.0
+    },
+    "traversal_shift": {
+      "cases": 2,
+      "mean_overall": 0.7,
+      "over_credit_points": 0.0
+    }
+  },
+  "summary": {
+    "cases": 60,
+    "exact_match_rate": 0.7666666666666667,
+    "mean_overall": 0.8141269841269841,
+    "over_credit_points": 39.0,
+    "under_credit_points": 7.0,
+    "unparseable": 0
+  },
+  "usage": {
+    "cache_hits": 0,
+    "calls": 120,
+    "cost_usd": 0.7891590000000002,
+    "input_tokens": 153688,
+    "output_tokens": 37989
+  }
+}

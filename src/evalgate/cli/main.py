@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -11,9 +12,11 @@ import typer
 from evalgate.analysis.load import load_label_pairs, load_outcomes
 from evalgate.config import get_settings
 from evalgate.core.aggregate import summarize, summarize_by_slice
+from evalgate.core.audit import Verification
 from evalgate.core.calibration import compute_calibration
 from evalgate.core.regression import compare_runs
 from evalgate.datasets.loader import CorpusError, load_corpus
+from evalgate.db.audit import AlreadySealedError, seal_run, verify_run
 from evalgate.db.repositories import (
     create_run,
     get_dataset,
@@ -28,6 +31,7 @@ from evalgate.judge.assessor import LlmJudge
 from evalgate.judge.cache import run_usage
 from evalgate.judge.client import AnthropicClient
 from evalgate.labeller.session import REASON_SETS, enqueue_review, run_labelling
+from evalgate.reporting.report import build_report
 from evalgate.reporting.text import calibration_lines, comparison_lines, run_lines
 from evalgate.runner.llm_grader import LlmGrader
 from evalgate.runner.loop import worker_loop
@@ -386,3 +390,113 @@ def serve(
     import uvicorn
 
     uvicorn.run("evalgate.api.app:app", host=host, port=port, reload=reload)
+
+def _echo_verification(verification: Verification) -> None:
+    typer.echo(f"links: {verification.links}")
+    typer.echo(f"root:  {verification.root or '(empty chain)'}")
+    if verification.ok:
+        typer.echo("integrity: OK")
+        return
+    typer.echo("integrity: FAILED")
+    for problem in verification.problems:
+        typer.echo(f"  {problem}")
+
+
+@app.command("seal")
+def seal(
+    run_id: Annotated[str, typer.Argument()],
+    reseal: Annotated[bool, typer.Option("--reseal", help="replace an existing chain")] = False,
+) -> None:
+    """Hash-chain a finished run's results."""
+    identifier = UUID(run_id)
+
+    async def go() -> None:
+        engine = build_engine()
+        async with session_scope(engine) as session:
+            try:
+                verification = await seal_run(session, identifier, reseal=reseal)
+            except AlreadySealedError as exc:
+                raise typer.BadParameter(str(exc)) from exc
+        await engine.dispose()
+        _echo_verification(verification)
+        if not verification.ok:
+            raise typer.Exit(code=1)
+
+    asyncio.run(go())
+
+
+@app.command("verify")
+def verify(run_id: Annotated[str, typer.Argument()]) -> None:
+    """Check a sealed run against its chain. Exits non-zero on any tampering."""
+    identifier = UUID(run_id)
+
+    async def go() -> None:
+        engine = build_engine()
+        async with session_scope(engine) as session:
+            verification = await verify_run(session, identifier)
+        await engine.dispose()
+        _echo_verification(verification)
+        if not verification.ok:
+            raise typer.Exit(code=1)
+
+    asyncio.run(go())
+
+
+@app.command("report")
+def report(
+    run_id: Annotated[str, typer.Argument()],
+    baseline: Annotated[str, typer.Option(help="run to gate against")] = "",
+    out: Annotated[Path, typer.Option(help="where to write the JSON")] = Path(
+        "report.json"
+    ),
+    calibration: Annotated[bool, typer.Option("--calibration")] = False,
+) -> None:
+    """Write an auditable JSON report, optionally including a gate verdict."""
+    identifier = UUID(run_id)
+
+    async def go() -> None:
+        engine = build_engine()
+        async with session_scope(engine) as session:
+            run = await get_run(session, identifier)
+            if run is None:
+                raise typer.BadParameter(f"no run {identifier}")
+
+            outcomes = await load_outcomes(session, identifier)
+            comparison = None
+            if baseline:
+                comparison = compare_runs(
+                    await load_outcomes(session, UUID(baseline)), outcomes
+                )
+
+            calibration_report = None
+            if calibration:
+                calibration_report = compute_calibration(
+                    await load_label_pairs(session, run_id=identifier)
+                )
+
+            body = build_report(
+                run_id=str(run.id),
+                label=run.label or "",
+                model=run.model,
+                status=str(run.status),
+                dataset=str(run.dataset_id),
+                dataset_content_hash=run.dataset_content_hash,
+                summary=summarize(outcomes),
+                usage=await run_usage(session, identifier),
+                slices=summarize_by_slice(outcomes, "error_mode"),
+                verification=await verify_run(session, identifier),
+                comparison=comparison,
+                calibration=calibration_report,
+            )
+        await engine.dispose()
+
+        out.write_text(json.dumps(body, indent=2, sort_keys=True), encoding="utf-8")
+        typer.echo(f"wrote {out}")
+        typer.echo(f"report hash {body['report_hash']}")
+        typer.echo(f"audit root  {body['audit']['root']}")
+        if comparison is not None:
+            typer.echo(f"gate: {'PASS' if comparison.passed else 'FAIL'}")
+            if not comparison.passed:
+                raise typer.Exit(code=1)
+
+    asyncio.run(go())

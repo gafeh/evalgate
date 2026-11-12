@@ -22,6 +22,9 @@ HELP = [
     ["worker", "--help"],
     ["calibrate", "--help"],
     ["serve", "--help"],
+    ["seal", "--help"],
+    ["verify", "--help"],
+    ["report", "--help"],
 ]
 
 

@@ -1,0 +1,111 @@
+name: eval gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  EVALGATE_DATABASE_URL: postgresql+asyncpg://evalgate:evalgate@localhost:5433/evalgate
+  EVALGATE_TEST_DATABASE_URL: postgresql+asyncpg://evalgate:evalgate@localhost:5433/evalgate_test
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: evalgate
+          POSTGRES_PASSWORD: evalgate
+          POSTGRES_DB: evalgate
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U evalgate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: create the test database
+        run: PGPASSWORD=evalgate psql -h localhost -p 5433 -U evalgate -d evalgate -c "CREATE DATABASE evalgate_test"
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run alembic upgrade head
+      - run: uv run alembic check
+      - run: uv run pytest -q
+
+  gate:
+    # Grades a baseline and a deliberately worse candidate with the stub
+    # grader, so the gate's wiring is exercised on every pull request for
+    # free and deterministically. The real-model gate costs money per run and
+    # lives in the live-gate workflow, triggered by hand.
+    runs-on: ubuntu-latest
+    needs: checks
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: evalgate
+          POSTGRES_PASSWORD: evalgate
+          POSTGRES_DB: evalgate
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U evalgate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync
+      - run: uv run alembic upgrade head
+
+      - name: load the corpus
+        run: uv run evalgate dataset load datasets/apcs --version ci
+
+      - name: grade a baseline
+        run: |
+          BASELINE=$(uv run evalgate run start --dataset apcs-frq@ci --model stub-v1 --label ci-baseline)
+          echo "BASELINE=$BASELINE" >> "$GITHUB_ENV"
+          uv run evalgate worker "$BASELINE" --worker-id ci-baseline
+
+      - name: grade a candidate that over-credits
+        run: |
+          CANDIDATE=$(uv run evalgate run start --dataset apcs-frq@ci --model stub-v2 --label ci-candidate)
+          echo "CANDIDATE=$CANDIDATE" >> "$GITHUB_ENV"
+          uv run evalgate worker "$CANDIDATE" --worker-id ci-candidate --over-credit-rate 0.3
+
+      - name: seal both runs
+        run: |
+          uv run evalgate seal "$BASELINE"
+          uv run evalgate seal "$CANDIDATE"
+
+      - name: verify integrity
+        run: |
+          uv run evalgate verify "$BASELINE"
+          uv run evalgate verify "$CANDIDATE"
+
+      - name: write the report
+        run: uv run evalgate report "$CANDIDATE" --baseline "$BASELINE" --out report.json || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: report.json
+
+      - name: gate on the regression
+        run: |
+          echo "This candidate over-credits on purpose, so the gate must fail."
+          if uv run evalgate run compare "$CANDIDATE" "$BASELINE"; then
+            echo "::error::the gate passed a known regression"
+            exit 1
+          fi
+          echo "gate correctly rejected the candidate"

@@ -290,3 +290,20 @@ class HumanLabel(UuidPk, Timestamped, Base):
     criteria: Mapped[dict[str, Any]]
     notes: Mapped[str] = mapped_column(Text, default="")
     seconds_spent: Mapped[int] = mapped_column(Integer, default=0)
+class AuditEntry(UuidPk, Timestamped, Base):
+    """One link in a run's hash chain, written when the run is sealed.
+
+    Written in a single pass rather than appended per result: keeping seq
+    contiguous while several workers commit concurrently would need a lock on
+    every write.
+    """
+
+    __tablename__ = "audit_entries"
+    __table_args__ = (UniqueConstraint("run_id", "seq"),)
+
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"))
+    seq: Mapped[int] = mapped_column(Integer)
+    entry_type: Mapped[str] = mapped_column(String(32))
+    payload: Mapped[dict[str, Any]]
+    prev_hash: Mapped[str] = mapped_column(String(64))
+    entry_hash: Mapped[str] = mapped_column(String(64), index=True)

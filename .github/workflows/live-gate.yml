@@ -1,0 +1,53 @@
+name: live gate
+
+# Real model, real money. Run this by hand against a prompt or model change,
+# not on every pull request.
+on:
+  workflow_dispatch:
+    inputs:
+      grader_model:
+        description: model under evaluation
+        default: claude-haiku-5-5
+      baseline_run_id:
+        description: an earlier run over the same dataset version
+        required: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: evalgate
+          POSTGRES_PASSWORD: evalgate
+          POSTGRES_DB: evalgate
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U evalgate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EVALGATE_DATABASE_URL: postgresql+asyncpg://evalgate:evalgate@localhost:5433/evalgate
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run alembic upgrade head
+      - run: uv run evalgate dataset load datasets/apcs --version live-ci
+      - name: grade with the real model
+        run: |
+          RUN=$(uv run evalgate run start --dataset apcs-frq@live-ci --model "${{ inputs.grader_model }}" --label live-ci)
+          echo "RUN=$RUN" >> "$GITHUB_ENV"
+          uv run evalgate grade "$RUN"
+          uv run evalgate seal "$RUN"
+          uv run evalgate run status "$RUN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: live-report
+          path: report.json
+        if: always()
+      - name: write the report
+        run: uv run evalgate report "$RUN" --out report.json

@@ -7,9 +7,9 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from evalgate.core.audit import result_fingerprint
 from evalgate.core.dataset import Dataset as CoreDataset
 from evalgate.core.grading import GradingEvaluation
-from evalgate.core.hashing import content_hash
 from evalgate.core.judgment import JudgeAssessment
 from evalgate.db.models import (
     Case,
@@ -78,6 +78,11 @@ async def save_dataset(session: AsyncSession, dataset: CoreDataset) -> Dataset:
     return row
 
 
+async def list_datasets(session: AsyncSession, limit: int = 100) -> Sequence[Dataset]:
+    stmt = select(Dataset).order_by(Dataset.created_at.desc()).limit(limit)
+    return (await session.execute(stmt)).scalars().all()
+
+
 async def list_cases(session: AsyncSession, dataset_id: UUID) -> Sequence[Case]:
     stmt = select(Case).where(Case.dataset_id == dataset_id).order_by(Case.external_id)
     return (await session.execute(stmt)).scalars().all()
@@ -113,6 +118,15 @@ async def get_run(session: AsyncSession, run_id: UUID) -> Run | None:
     return await session.get(Run, run_id)
 
 
+async def list_runs(
+    session: AsyncSession, *, dataset_id: UUID | None = None, limit: int = 100
+) -> Sequence[Run]:
+    stmt = select(Run).order_by(Run.created_at.desc()).limit(limit)
+    if dataset_id is not None:
+        stmt = stmt.where(Run.dataset_id == dataset_id)
+    return (await session.execute(stmt)).scalars().all()
+
+
 async def work_item_counts(session: AsyncSession, run_id: UUID) -> dict[str, int]:
     stmt = (
         select(WorkItem.status, func.count())
@@ -136,19 +150,17 @@ async def record_result(
 ) -> Result:
     """Persist one scored case. evaluation is None when the output never parsed."""
     scores = (
-        {score.scorer: {"value": score.value, "passed": score.passed, "detail": score.detail}
-         for score in evaluation.scores}
+        {
+            score.scorer: {
+                "value": score.value,
+                "passed": score.passed,
+                "detail": score.detail,
+            }
+            for score in evaluation.scores
+        }
         if evaluation
         else {}
     )
-    payload: dict[str, Any] = {
-        "run_id": str(run_id),
-        "case_id": str(case_id),
-        "raw_output": raw_output,
-        "grading": grading,
-        "scores": scores,
-        "overall": evaluation.overall if evaluation else None,
-    }
 
     result = Result(
         run_id=run_id,
@@ -165,7 +177,15 @@ async def record_result(
             "ids": list(evaluation.hallucinated_item_ids) if evaluation else []
         },
         latency_ms=latency_ms,
-        content_hash=content_hash(payload),
+        # One definition of a result's identity, shared with the audit chain.
+        content_hash=result_fingerprint(
+            run_id=str(run_id),
+            case_id=str(case_id),
+            raw_output=raw_output,
+            grading=grading,
+            scores=scores,
+            overall=evaluation.overall if evaluation else None,
+        ),
     )
     session.add(result)
     await session.commit()
@@ -183,6 +203,8 @@ async def mark_work_item_done(session: AsyncSession, work_item_id: UUID) -> None
         raise LookupError(f"no work item {work_item_id}")
     item.status = WorkItemStatus.DONE
     await session.commit()
+
+
 async def save_judge_assessment(
     session: AsyncSession,
     *,
@@ -210,16 +232,3 @@ async def get_judge_assessment(
 ) -> JudgeAssessmentRow | None:
     stmt = select(JudgeAssessmentRow).where(JudgeAssessmentRow.result_id == result_id)
     return (await session.execute(stmt)).scalar_one_or_none()
-
-async def list_datasets(session: AsyncSession, limit: int = 100) -> Sequence[Dataset]:
-    stmt = select(Dataset).order_by(Dataset.created_at.desc()).limit(limit)
-    return (await session.execute(stmt)).scalars().all()
-
-
-async def list_runs(
-    session: AsyncSession, *, dataset_id: UUID | None = None, limit: int = 100
-) -> Sequence[Run]:
-    stmt = select(Run).order_by(Run.created_at.desc()).limit(limit)
-    if dataset_id is not None:
-        stmt = stmt.where(Run.dataset_id == dataset_id)
-    return (await session.execute(stmt)).scalars().all()
