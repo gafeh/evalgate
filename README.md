@@ -4,9 +4,12 @@ An evaluation harness for LLM graders. It scores a model's rubric decisions agai
 human ground truth, measures whether its own judge can be trusted, and refuses to
 call a change an improvement unless the statistics support it.
 
-The subject under evaluation here is an AP Computer Science A grader: given a
-free-response question, an official-style rubric and a student's Java, it awards
-rubric items and writes feedback to the student.
+**Live API and docs:** https://evalgate-pi.vercel.app/docs
+
+The subject under evaluation is an AP Computer Science A grader: given a free-response
+question, an official-style rubric and a student's Java, it awards rubric items and
+writes feedback addressed to the student. Everything here generalises to any task
+where a model makes a judgement that a human would otherwise make.
 
 ## What it found
 
@@ -18,44 +21,52 @@ Claude Haiku 5.5 grading 60 authored cases across four questions:
 | cases matching the rubric exactly | 76.7% |
 | rubric points awarded that weren't earned | 39 |
 | rubric points missed that were earned | 7 |
+| cost of the full run | $0.79 |
 
-The over-crediting is five times the under-crediting, and almost all of it sits in
-one place. Broken out by error mode, the grader scores between 0.51 and 1.00 on
-every family of mistake except one:
+Over-crediting runs at more than five times the under-crediting, and almost all of it
+sits in one place. Broken out by error mode, the grader is strong everywhere except a
+single family of mistake:
 
 ```
   correct            n=13   mean=1.000  over=0
   off_by_one         n=7    mean=1.000  over=0
   reference_equality n=2    mean=1.000  over=0
+  initialisation     n=5    mean=1.000  over=0
   return_value       n=5    mean=0.920  over=0
+  incomplete         n=5    mean=0.880  over=0
   traversal_shift    n=2    mean=0.700  over=0
   logic              n=3    mean=0.667  over=0
   syntax             n=8    mean=0.000  over=38
 ```
 
 Eight cases of code that does not compile, scored 0.000, carrying 38 of the 39
-unearned points. The grader reasons about what the student meant and treats syntax
-as a cosmetic aside. On two of those cases it awarded full marks and then listed the
-missing semicolons as a closing note. On another it wrote "under the rubric as given,
-the logic earns full credit" about code that cannot be compiled.
+unearned points. The grader reasons about what the student meant and treats syntax as
+a cosmetic aside. On two of those cases it awarded full marks and then listed the
+missing semicolons as a closing note. On another it wrote *"under the rubric as given,
+the logic earns full credit"* about code that cannot be compiled.
 
-A student reading that feedback is told their broken program is correct.
+A student reading that feedback is told their broken program is correct. That is a
+specific, reproducible, mechanistic failure, and it was found by measurement rather
+than by noticing something odd.
+
+![Runs](docs/screenshots/runs.png)
 
 ## Why over-crediting is the metric
 
 Most eval harnesses report accuracy. In grading, the two directions of error are not
 interchangeable. Missing a point a student earned gets caught the moment they
-complain. Awarding a point they didn't earn goes onto a transcript. So every run
-reports the two separately and never nets them off, and the regression gate checks
-over-crediting before it looks at the aggregate score. A candidate that scores
-better overall while handing out more unearned points is a regression.
+complain. Awarding a point they didn't earn goes onto a transcript.
+
+So every run reports the two separately and never nets them off, and the regression
+gate checks over-crediting *before* it looks at the aggregate score. A candidate that
+scores better overall while handing out more unearned points is a regression, and the
+gate says so.
 
 ## Measuring the measuring instrument
 
-An LLM judge reviews each piece of grader feedback and reports a verdict with a
-confidence number. That number is a claim, not a measurement, so the project checks
-it: 50 cases were labelled by hand, blind to the judge's verdict, and the judge was
-scored against those labels.
+An LLM judge reviews each piece of grader feedback and returns a verdict with a
+confidence number. That number is a claim, so the harness checks it: 50 cases were
+labelled by hand, blind to the judge's verdict, and the judge was scored against them.
 
 ```
 labelled calibration pairs: 50
@@ -73,35 +84,59 @@ reliability curve
   0.8-1.0          47     0.929    0.979   +0.049
 
 agreement by judge verdict
+  pass      0.976
   fail      0.833
   partial   0.500
-  pass      0.976
 ```
 
-Kappa of 0.796 matters more than the raw 0.940, because a judge that always says
-"pass" on a mostly-passing set would score high agreement by accident. The judge is
-mildly underconfident rather than overconfident, and it is far more reliable when
-approving than when rejecting.
+Kappa of 0.796 is the number that matters, more than the raw 0.940. A judge that
+always says "pass" on a mostly-passing set scores high agreement by accident, and
+kappa strips that out. 0.796 is substantial agreement by any standard reading.
 
-Two properties of the design make these numbers mean something.
+The judge is also mildly *under*confident rather than overconfident, which is the rarer
+and more useful direction: in the 0.8-1.0 band it claims 0.929 and delivers 0.979. And
+it is far more reliable when approving than when rejecting, which tells you exactly
+where a human's attention is worth spending.
+
+![Calibration](docs/screenshots/calibration.png)
+
+Two design properties make these numbers mean something.
 
 **Labelling is blind structurally, not by convention.** The object handed to the
-labelling interface has no verdict or confidence field on it. Not hidden by the
-renderer, absent from the type, and a test asserts it stays that way. If you can see
-the judge's answer while labelling, the agreement number you compute afterwards is
-circular.
+labelling interface has no verdict and no confidence field on it. Not hidden by the
+renderer, absent from the type, with tests asserting it stays that way in both the
+terminal and the web UI. If you can see the judge's answer while labelling, the
+agreement number you compute afterwards is circular.
 
-**The calibration sample is drawn before triage, at random.** The obvious design
-routes low-confidence results to review. Label only those and you have measured the
-judge exactly where it said it was unsure, which tells you nothing about the
-high-confidence cases you were about to auto-approve. So there are two populations:
-a random sample for measurement, and a triage queue for action. The metrics only
-ever use the first.
+**The calibration sample is drawn before triage, at random.** The obvious design routes
+low-confidence results to review. Label only those and you've measured the judge
+exactly where it said it was unsure, which says nothing about the high-confidence cases
+you were about to auto-approve. So there are two populations: a random sample for
+measurement and a triage queue for action, and the metrics only ever use the first.
 
-### What the calibration can't tell you yet
+### Stratified sampling with inverse-probability weights
 
-The report refuses to oversell itself. On this data it recommends a review threshold
-and then says why not to use it:
+A judge that reports 0.9 on most cases produces a random sample that is nearly all
+high confidence, so the interesting end of the curve stays empty. EvalGate fixes that
+properly rather than by labelling more of the same.
+
+Results are split into strata by confidence, a fixed number is drawn from each stratum
+regardless of how rare it is, and every label carries the inverse of its inclusion
+probability as a weight. Agreement, kappa, Brier, ECE, the reliability curve and the
+threshold search are all weighted, so deliberately oversampling a rare stratum buys
+coverage without distorting the estimate. Kish's effective sample size is reported
+alongside the raw count, so the precision cost of the weighting is visible rather than
+hidden. A simple random sample is the special case where every weight is 1, and the
+numbers collapse to the ordinary ones exactly.
+
+### The report polices itself
+
+A calibration report that comes back perfect is usually describing its inputs rather
+than the judge, so the report checks its own inputs and says so. It flags a sample too
+small to support the statistics, repeated cases being counted as independent
+observations, a confidence distribution confined to one bin, and suspiciously perfect
+agreement. The threshold recommendation carries its own separate warnings, because a
+cut can be unsupported even when the agreement numbers are sound:
 
 ```
 recommended review threshold: 0.550
@@ -111,30 +146,28 @@ recommended review threshold: 0.550
   ! only 0 labelled pairs fall below the cut, so its low side is unmeasured
 ```
 
-The judge reports 0.8 or higher on 94% of cases, so a random sample of 50 contains
-almost no low-confidence examples and no threshold claim is supported. The fix is
-stratified sampling with weights carried through the metrics, and it isn't built yet.
-Until it is, the honest answer is that the threshold is unknown.
+A tool that tells you when not to believe it is more useful than one that always
+sounds certain.
 
 ## Deciding whether a change is real
 
-Two runs over the same cases are compared with a paired bootstrap on the
-per-case difference, and the verdict has four states rather than two:
+Two runs over the same cases are compared with a paired bootstrap on the per-case
+difference, and the verdict has four states rather than two:
 
-- **regressed** if over-crediting rose significantly, or the score interval sits
-  below zero by more than the minimum effect
+- **regressed** if over-crediting rose significantly, or the score interval sits below
+  zero by more than the minimum effect
 - **improved** if the interval sits above zero by more than the minimum effect
-- **no change** if the whole interval fits inside the minimum effect band, which
-  rules out a change worth acting on
+- **no change** if the whole interval fits inside the minimum-effect band, which rules
+  out a difference worth acting on
 - **inconclusive** if the interval straddles zero and is too wide to rule one out
 
-Only the middle two pass. "Inconclusive" failing the gate is the point: it is not the
-same as "nothing changed", and a gate that treats them alike waves regressions
-through whenever the dataset is small. When a comparison is inconclusive the tool
-estimates how many more paired cases would settle it.
+Only the middle two pass. Inconclusive failing the gate is the point: it is not the
+same as "nothing changed", and a gate that treats them alike waves regressions through
+whenever the dataset is small. When a comparison is inconclusive the tool estimates how
+many more paired cases would settle it.
 
-The same 30% over-crediting injected into 200 cases is a confident regression, and
-into 12 cases is an honest "not enough data, you'd need about 217".
+The same 30% over-crediting injected into 200 cases is a confident regression. Into 12
+cases it is an honest "not enough data, you'd need about 217".
 
 ## Tamper-evident results
 
@@ -153,13 +186,39 @@ integrity: FAILED
   seq 7:  row: case count-length-as-method no longer matches its own fingerprint
   seq 8:  row: case count-missing-paren no longer matches its own fingerprint
   seq 17: row: case remove-clears-everything no longer matches its own fingerprint
+  seq 25: row: case remove-length-not-size no longer matches its own fingerprint
   ...
 ```
 
-That edit rewrites exactly the eight non-compiling cases to look like full marks,
-which is the specific lie someone would tell about this run. All nine rows are named
-by case id. The chain also doubles as a recovery record, since each link carries the
-score it was sealed with.
+That edit rewrites exactly the eight non-compiling cases to look like full marks, which
+is the specific lie someone would tell about this run. All nine altered rows are named
+by case id. Each link also carries the score it was sealed with, so the chain doubles
+as a recovery record and the run can be restored from it.
+
+## The work queue
+
+Postgres is the queue. Workers claim batches with `SELECT ... FOR UPDATE SKIP LOCKED`,
+heartbeat while they work, and anything a dead worker was holding is returned to the
+queue by whoever notices. No Redis, no Celery, no Kafka.
+
+Delivery is at-least-once and the unique constraint on `(run_id, case_id)` is what
+makes that safe, so a retry after a crash bounces off the database rather than
+double-counting. Kill a worker mid-run across 500 cases and every case is still graded
+exactly once, which is a test in the suite and not an aspiration.
+
+Model responses are cached by a hash of everything that determines the answer, and
+every call is written to a separate append-only ledger. A rerun of an identical
+evaluation reports the same work at zero cost, which is also where reproducibility
+comes from: the API no longer accepts sampling parameters, so replaying a cached
+response is the only way to get the same answer twice.
+
+## Labelling
+
+Blind, keyboard-driven, in the terminal or the browser. The card shows the question,
+the rubric, the student's code, the correct awards, what the grader awarded and the
+feedback under judgement, and nothing about what the judge thought.
+
+![Labelling](docs/screenshots/labelling.png)
 
 ## Running it
 
@@ -172,19 +231,19 @@ uv run alembic upgrade head
 
 uv run evalgate dataset load datasets/apcs --version 1
 RUN=$(uv run evalgate run start --dataset apcs-frq@1 --model claude-haiku-5-5)
-uv run evalgate grade "$RUN"         # needs ANTHROPIC_API_KEY, costs about $0.80
+uv run evalgate grade "$RUN"         # needs ANTHROPIC_API_KEY
 uv run evalgate run status "$RUN"
 ```
 
-Then measure the judge:
+Measure the judge:
 
 ```bash
-uv run evalgate review enqueue "$RUN" --sample 50
+uv run evalgate review enqueue "$RUN" --stratified --per-stratum 12
 uv run evalgate review label --run-id "$RUN" --labeller you
 uv run evalgate calibrate --run-id "$RUN"
 ```
 
-Then gate a change and seal the record:
+Gate a change and seal the record:
 
 ```bash
 uv run evalgate run compare "$CANDIDATE" "$BASELINE"   # exit 1 on a regression
@@ -193,22 +252,19 @@ uv run evalgate verify "$RUN"
 uv run evalgate report "$RUN" --baseline "$BASELINE" --out report.json
 ```
 
-`evalgate worker` runs the same pipeline against a deterministic stub grader, so the
-queue, the gate and the audit chain can all be exercised without spending anything.
-`evalgate serve` exposes the same data over HTTP with OpenAPI docs at `/docs`.
+`evalgate worker` runs the whole pipeline against a deterministic stub grader, so the
+queue, the gate and the audit chain can be exercised without spending anything.
+`evalgate serve` brings up the dashboard at `/ui` and OpenAPI docs at `/docs`.
+
+Every pull request runs the full suite against a real Postgres, then grades a baseline
+and a deliberately worse candidate and asserts that the gate rejects it. A workflow
+that only tests the happy path tells you nothing about whether a gate works.
 
 ## How it's built
 
 Python throughout. FastAPI, Postgres 16, SQLAlchemy 2 in async mode with Alembic
-migrations, Pydantic at every boundary, Typer for the CLI, pytest, ruff and mypy in
-strict mode. 272 tests.
-
-Postgres is also the work queue. Workers claim batches with
-`SELECT ... FOR UPDATE SKIP LOCKED`, heartbeat while they work, and anything a dead
-worker was holding is returned to the queue by whoever notices. Delivery is
-at-least-once and the unique constraint on `(run_id, case_id)` is what makes that
-safe, so a retry after a crash bounces off the database rather than double-counting.
-Kill a worker mid-run and every case is still graded exactly once.
+migrations, Pydantic at every boundary, Jinja and HTMX for the dashboard, Typer for the
+CLI, pytest, ruff and mypy in strict mode. 301 tests.
 
 ```
 src/evalgate/
@@ -217,32 +273,24 @@ src/evalgate/
   judge/       API client, response cache, cost ledger, the feedback judge
   runner/      grading loop and workers
   api/         FastAPI routers
+  web/         server-rendered dashboard
   cli/         the evalgate command
 datasets/apcs/ the authored case corpus
 ```
 
 `core/` imports no database driver, no web framework and no HTTP client, and a test
-walks its imports to keep it that way. Most of the suite runs in milliseconds with
-no database at all.
+walks its imports to keep it that way. Most of the suite runs in milliseconds against
+no database at all, which is why 301 tests finish in under 40 seconds.
 
-Model responses are cached by a hash of everything that determines the answer, and
-every call is logged to a separate append-only ledger. A rerun of an identical
-evaluation reports the same work at zero cost, which is also where reproducibility
-comes from: the API no longer accepts sampling parameters, so replaying a cached
-response is the only way to get the same answer twice.
+The case corpus is 60 responses across four questions, each with hand-assigned rubric
+awards and hand-written feedback requirements, covering fifteen error modes from
+off-by-one to reference equality to collection mutation during iteration. The loader
+rejects duplicate responses outright, because a corpus that repeats itself inflates
+every sample size downstream.
 
-## Limitations
+## Deployment
 
-There is one labeller. Agreement with a single human is not the same as agreement
-with the rubric, and there's no second rater to measure how consistent that human is.
-
-The judge's calibration is unmeasured below 0.8 confidence, for the reason given
-above.
-
-The per-pull-request CI gate grades with the stub so it runs free and
-deterministically on every change. The real-model gate is a separate workflow run by
-hand, because grading 60 cases against a live API on every push costs money.
-
-Model prices are hardcoded in `judge/pricing.py` and need checking against current
-rates. A stale constant there makes every cost figure wrong and nothing in the code
-can detect it.
+One container running the API, Postgres on Neon, serving read-only. The public
+deployment rejects every non-GET request at the middleware rather than relying on
+nobody finding the write endpoints. Workers are not deployed: grading costs money and
+needs an API key, so it stays a local or CI operation.
