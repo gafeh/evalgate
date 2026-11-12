@@ -209,3 +209,46 @@ async def test_an_unknown_verdict_is_rejected(client: AsyncClient) -> None:
 
 async def test_an_empty_review_queue_is_404(client: AsyncClient) -> None:
     assert (await client.get("/review/next")).status_code == 404
+@pytest_asyncio.fixture
+async def locked_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    app = create_app(engine=engine, read_only=True)
+    transport = ASGITransport(app=app)
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as http,
+        app.router.lifespan_context(app),
+    ):
+        yield http
+
+
+async def test_a_read_only_deployment_still_serves_reads(
+    locked_client: AsyncClient,
+) -> None:
+    health = await locked_client.get("/health")
+    assert health.status_code == 200
+    assert health.json()["read_only"] is True
+    assert (await locked_client.get("/runs")).status_code == 200
+
+
+async def test_a_read_only_deployment_rejects_every_write(
+    locked_client: AsyncClient,
+) -> None:
+    """A public demo must not let a stranger start a run or write a label."""
+    writes = [
+        locked_client.post("/datasets", json={}),
+        locked_client.post("/runs", json={}),
+        locked_client.post(
+            "/runs/00000000-0000-0000-0000-000000000000/review", json={}
+        ),
+        locked_client.post(
+            "/review/00000000-0000-0000-0000-000000000000/label", json={}
+        ),
+    ]
+    for response in writes:
+        result = await response
+        assert result.status_code == 405
+        assert result.json()["detail"] == "this deployment is read-only"
+
+
+async def test_writes_still_work_when_not_locked(client: AsyncClient) -> None:
+    payload = make_dataset(make_case("a")).model_dump(mode="json")
+    assert (await client.post("/datasets", json=payload)).status_code == 201

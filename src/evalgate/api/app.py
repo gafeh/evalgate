@@ -1,18 +1,25 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from evalgate import __version__
 from evalgate.api.routers import datasets, reports, review, runs
+from evalgate.config import get_settings
 from evalgate.db.session import build_engine
 
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
-def create_app(engine: AsyncEngine | None = None) -> FastAPI:
+
+def create_app(
+    engine: AsyncEngine | None = None, *, read_only: bool | None = None
+) -> FastAPI:
     """Build the app. Pass an engine to bind it to a specific database."""
+    locked = get_settings().read_only if read_only is None else read_only
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -30,10 +37,24 @@ def create_app(engine: AsyncEngine | None = None) -> FastAPI:
         summary="LLM evaluation harness with judge calibration and regression gating",
         lifespan=lifespan,
     )
+    app.state.read_only = locked
+
+    if locked:
+
+        @app.middleware("http")
+        async def _reject_writes(
+            request: Request, call_next: Callable[[Request], Awaitable[Response]]
+        ) -> Response:
+            if request.method not in SAFE_METHODS:
+                return JSONResponse(
+                    {"detail": "this deployment is read-only"},
+                    status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+                )
+            return await call_next(request)
 
     @app.get("/health", tags=["meta"])
-    async def health() -> dict[str, str]:
-        return {"status": "ok", "version": __version__}
+    async def health() -> dict[str, str | bool]:
+        return {"status": "ok", "version": __version__, "read_only": locked}
 
     app.include_router(datasets.router)
     app.include_router(runs.router)
